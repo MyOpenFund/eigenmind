@@ -32,15 +32,20 @@ PdfParser._get_line_spacing = _safe_get_line_spacing
 from eigenmind.config import get_ocr_languages, ocr_available
 
 
-def _file_parser_for(ext: str):
+def _file_parser_for(ext: str, use_ocr: str | None = None):
     """Return a ChunkNorris parser that reads ``ext`` files directly, or None.
 
     PPTX and TXT are excluded here — they are turned into markdown strings first and
     parsed via :meth:`MarkdownParser.parse_string` in :func:`chunk_with_chunknorris`.
+
+    ``use_ocr`` overrides the environment-driven OCR mode for PDFs
+    ("auto" | "always" | "never"); ``None`` keeps the default behavior.
     """
     if ext == ".pdf":
+        if use_ocr is None:
+            use_ocr = "auto" if ocr_available() else "never"
         return PdfParser(
-            use_ocr="auto" if ocr_available() else "never",
+            use_ocr=use_ocr,
             ocr_language=get_ocr_languages(),
         )
     if ext == ".docx":
@@ -62,13 +67,14 @@ def _pptx_to_markdown(filepath: str) -> str:
     return MarkItDown().convert(filepath).text_content
 
 
-def chunk_with_chunknorris(filepath: str):
+def chunk_with_chunknorris(filepath: str, use_ocr: str | None = None):
     """Parse a supported file to markdown via ChunkNorris and return its chunks.
 
     PDF, DOCX, XLSX, CSV and MD are parsed natively by ChunkNorris. TXT is read as raw
     markdown text, and PPTX is first converted to markdown with MarkItDown. Every path
     ends in :class:`MarkdownParser` + :class:`MarkdownChunker`. Raises :class:`ValueError`
-    for any other extension.
+    for any other extension. ``use_ocr`` optionally overrides the environment-driven
+    OCR mode for PDFs ("auto" | "always" | "never"); ``None`` keeps the default.
     """
     ext = os.path.splitext(filepath)[1].lower()
 
@@ -80,7 +86,7 @@ def chunk_with_chunknorris(filepath: str):
         with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
             doc = MarkdownParser().parse_string(f.read())
     else:
-        parser = _file_parser_for(ext)
+        parser = _file_parser_for(ext, use_ocr=use_ocr)
         if parser is None:
             raise ValueError(f"format '{ext}' is not supported by ChunkNorris")
         doc = parser.parse_file(filepath)
