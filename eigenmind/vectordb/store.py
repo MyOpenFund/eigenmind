@@ -16,6 +16,7 @@ from qdrant_client import QdrantClient, models
 from eigenmind.config import (
     BATCH_SIZE,
     EMBEDDING_DIM_DEFAULT,
+    qdrant_api_key,
     qdrant_host,
     qdrant_port,
 )
@@ -57,6 +58,12 @@ def date_range_filter(date: datetime.date) -> models.Filter:
     ])
 
 
+def _resolve_api_key(api_key: str | None) -> str | None:
+    """An explicit non-blank key wins; otherwise ``QDRANT_API_KEY`` (or ``None``)."""
+    explicit = (api_key or "").strip()
+    return explicit or qdrant_api_key()
+
+
 class QdrantStore:
     """Qdrant connection + collection management + ingestion + retrieval, in one place."""
 
@@ -65,10 +72,14 @@ class QdrantStore:
         host: str | None = None,
         port: int | None = None,
         timeout: int = 60,
+        api_key: str | None = None,
     ):
         self.host = host or qdrant_host()
         self.port = port or qdrant_port()
-        self._client = QdrantClient(host=self.host, port=self.port, timeout=timeout)
+        self._client = QdrantClient(
+            host=self.host, port=self.port, timeout=timeout,
+            api_key=_resolve_api_key(api_key),
+        )
 
     # ─── connection / introspection ────────────────────────────────
 
@@ -78,10 +89,12 @@ class QdrantStore:
         return self._client
 
     @classmethod
-    def is_reachable(cls, host: str | None = None, port: int | None = None) -> bool:
+    def is_reachable(cls, host: str | None = None, port: int | None = None,
+                     api_key: str | None = None) -> bool:
         """Quick health check that does not raise (used by the sidebar status pill)."""
         try:
-            QdrantClient(host=host or qdrant_host(), port=port or qdrant_port(), timeout=3).get_collections()
+            QdrantClient(host=host or qdrant_host(), port=port or qdrant_port(), timeout=3,
+                         api_key=_resolve_api_key(api_key)).get_collections()
             return True
         except Exception:
             return False
