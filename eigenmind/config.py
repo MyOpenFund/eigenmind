@@ -85,6 +85,12 @@ def qdrant_port() -> int:
     return int(os.getenv("QDRANT_PORT", "6333"))
 
 
+def qdrant_api_key() -> str | None:
+    """Qdrant API key from env (``QDRANT_API_KEY``), stripped; ``None`` when unset or blank."""
+    key = os.getenv("QDRANT_API_KEY", "").strip()
+    return key or None
+
+
 def nebius_api_key() -> str:
     """Nebius / AI Hub API key from env (or empty string if not set)."""
     return os.getenv("NEBIUS_API_KEY", "").strip()
