@@ -18,6 +18,7 @@ from eigenmind.config import (
     EMBEDDING_DIM_DEFAULT,
     qdrant_api_key,
     qdrant_host,
+    qdrant_https,
     qdrant_port,
 )
 
@@ -78,7 +79,7 @@ class QdrantStore:
         self.port = port or qdrant_port()
         self._client = QdrantClient(
             host=self.host, port=self.port, timeout=timeout,
-            api_key=_resolve_api_key(api_key),
+            api_key=_resolve_api_key(api_key), https=qdrant_https(),
         )
 
     # ─── connection / introspection ────────────────────────────────
@@ -94,7 +95,7 @@ class QdrantStore:
         """Quick health check that does not raise (used by the sidebar status pill)."""
         try:
             QdrantClient(host=host or qdrant_host(), port=port or qdrant_port(), timeout=3,
-                         api_key=_resolve_api_key(api_key)).get_collections()
+                         api_key=_resolve_api_key(api_key), https=qdrant_https()).get_collections()
             return True
         except Exception:
             return False

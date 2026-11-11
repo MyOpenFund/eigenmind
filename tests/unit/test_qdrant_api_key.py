@@ -43,14 +43,16 @@ def test_api_key_is_stripped(monkeypatch):
 
 def test_store_passes_the_env_key(monkeypatch, rec):
     monkeypatch.setenv("QDRANT_API_KEY", "k1")
+    monkeypatch.delenv("QDRANT_HTTPS", raising=False)
     QdrantStore(host="h", port=1)
-    assert rec.calls[-1] == {"host": "h", "port": 1, "timeout": 60, "api_key": "k1"}
+    assert rec.calls[-1] == {"host": "h", "port": 1, "timeout": 60, "api_key": "k1", "https": False}
 
 
 def test_store_without_key_passes_none(monkeypatch, rec):
     monkeypatch.delenv("QDRANT_API_KEY", raising=False)
+    monkeypatch.delenv("QDRANT_HTTPS", raising=False)
     QdrantStore(host="h", port=1)
-    assert rec.calls[-1] == {"host": "h", "port": 1, "timeout": 60, "api_key": None}
+    assert rec.calls[-1] == {"host": "h", "port": 1, "timeout": 60, "api_key": None, "https": False}
 
 
 def test_explicit_key_wins_over_env(monkeypatch, rec):
@@ -67,5 +69,54 @@ def test_blank_explicit_key_falls_back_to_env(monkeypatch, rec):
 
 def test_is_reachable_passes_the_key(monkeypatch, rec):
     monkeypatch.setenv("QDRANT_API_KEY", "k1")
+    monkeypatch.delenv("QDRANT_HTTPS", raising=False)
     assert QdrantStore.is_reachable("h", 1) is True
-    assert rec.calls[-1] == {"host": "h", "port": 1, "timeout": 3, "api_key": "k1"}
+    assert rec.calls[-1] == {"host": "h", "port": 1, "timeout": 3, "api_key": "k1", "https": False}
+
+
+@pytest.mark.parametrize("raw", [None, "", "  ", "0", "false", "False", "no", "off"])
+def test_https_defaults_to_false(monkeypatch, raw):
+    if raw is None:
+        monkeypatch.delenv("QDRANT_HTTPS", raising=False)
+    else:
+        monkeypatch.setenv("QDRANT_HTTPS", raw)
+    assert config.qdrant_https() is False
+
+
+@pytest.mark.parametrize("raw", ["1", "true", " TRUE ", "yes", "on"])
+def test_https_true_values(monkeypatch, raw):
+    monkeypatch.setenv("QDRANT_HTTPS", raw)
+    assert config.qdrant_https() is True
+
+
+def test_https_rejects_garbage(monkeypatch):
+    monkeypatch.setenv("QDRANT_HTTPS", "maybe")
+    with pytest.raises(ValueError, match="QDRANT_HTTPS='maybe' is not a boolean"):
+        config.qdrant_https()
+
+
+def test_a_key_does_not_switch_the_client_to_tls(monkeypatch, rec):
+    """qdrant-client turns https on whenever api_key is set and https is None:
+    eigenmind must always pass it explicitly (plain HTTP by default)."""
+    monkeypatch.setenv("QDRANT_API_KEY", "k1")
+    monkeypatch.delenv("QDRANT_HTTPS", raising=False)
+    QdrantStore(host="h", port=1)
+    QdrantStore.is_reachable("h", 1)
+    assert [c["https"] for c in rec.calls] == [False, False]
+
+
+def test_https_flag_reaches_the_client(monkeypatch, rec):
+    monkeypatch.setenv("QDRANT_HTTPS", "true")
+    QdrantStore(host="h", port=1)
+    assert rec.calls[-1]["https"] is True
+
+
+def test_the_real_client_stays_on_http_with_a_key(monkeypatch):
+    """Against the real qdrant-client class (no network: construction only)."""
+    monkeypatch.setenv("QDRANT_API_KEY", "k1")
+    monkeypatch.delenv("QDRANT_HTTPS", raising=False)
+    import warnings
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # "Api key is used with an insecure connection"
+        store = QdrantStore(host="h", port=1)
+    assert store.client._client.rest_uri.startswith("http://")

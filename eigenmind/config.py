@@ -91,6 +91,22 @@ def qdrant_api_key() -> str | None:
     return key or None
 
 
+_TRUE = {"1", "true", "yes", "on"}
+_FALSE = {"", "0", "false", "no", "off"}
+
+
+def qdrant_https() -> bool:
+    """``QDRANT_HTTPS`` (default false). Always passed to ``QdrantClient``:
+    left as ``None``, qdrant-client switches to TLS whenever an API key is set."""
+    raw = os.getenv("QDRANT_HTTPS", "")
+    text = raw.strip().lower()
+    if text in _TRUE:
+        return True
+    if text in _FALSE:
+        return False
+    raise ValueError(f"QDRANT_HTTPS={raw!r} is not a boolean (use true/false)")
+
+
 def nebius_api_key() -> str:
     """Nebius / AI Hub API key from env (or empty string if not set)."""
     return os.getenv("NEBIUS_API_KEY", "").strip()
